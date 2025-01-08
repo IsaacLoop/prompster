@@ -57,10 +57,14 @@ def build_file_tree(path: Path):
     """
     Return a dict: {
       name, path, fullPath, is_dir,
-      children[], directCount, totalCount
+      children[], directCount, totalCount, size
     }
     """
     if not path.is_dir():
+        try:
+            size = path.stat().st_size
+        except:
+            size = 0
         return {
             "name": path.name,
             "path": path.relative_to(Path.cwd()).as_posix(),
@@ -69,6 +73,7 @@ def build_file_tree(path: Path):
             "children": [],
             "directCount": 0,
             "totalCount": 1,
+            "size": size
         }
 
     items = []
@@ -144,7 +149,7 @@ INDEX_HTML = r"""
       text-align: center;
       cursor: pointer;
     }
-    .folder-count {
+    .folder-count, .file-size {
       color: #999; 
       font-size: 0.85em;
       margin-left: 0.3em;
@@ -280,6 +285,22 @@ INDEX_HTML = r"""
       }
     }
 
+    function formatSize(bytes) {
+      const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+      let size = bytes;
+      let unitIndex = 0;
+      
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+      }
+      
+      if (units[unitIndex] === 'B') {
+        return `(${Math.round(size)} ${units[unitIndex]})`;
+      }
+      return `(${size.toFixed(1)} ${units[unitIndex]})`;
+    }
+
     function renderTree(container, nodeList, depth) {
       const ul = document.createElement('ul');
 
@@ -398,8 +419,13 @@ INDEX_HTML = r"""
           fileLabel.classList.add('file-label');
           fileLabel.textContent = " " + node.name;
 
+          const sizeSpan = document.createElement('span');
+          sizeSpan.classList.add('file-size');
+          sizeSpan.textContent = formatSize(node.size);
+
           li.appendChild(fileCb);
           li.appendChild(fileLabel);
+          li.appendChild(sizeSpan);
         }
         ul.appendChild(li);
       }
