@@ -13,3 +13,7 @@ Simple Python script that runs a nice UI to easily select specific files from yo
 ## Screenshot
 
 <img src="sc.png" width="600" alt="Screenshot of prompster">
+
+## Disclaimer
+
+Entirely vibe-coded with o1-pro, not necessarily the cleanest code, but it works fine.
