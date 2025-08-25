@@ -368,14 +368,28 @@ INDEX_HTML = r"""
 
   // Default names to exclude from bulk selection. Users can override per item.
   const BLACKLIST_NAMES = [
+    // Common env/config/cache
     '.env', '.env.local', '.env.development', '.env.production', '.env.test',
-    '__pycache__', '.pytest_cache', '.mypy_cache', '.ipynb_checkpoints',
-    'node_modules', '.venv', 'venv', '.tox', '.cache', 'build', 'dist'
+    '__pycache__', '.pytest_cache', '.mypy_cache', '.ipynb_checkpoints', '.cache',
+    // Package and build artifacts
+    'node_modules', '.venv', 'venv', 'env', '.tox', 'build', 'dist', 'coverage', 'htmlcov',
+    '.serverless', '.parcel-cache', '.next', '.nuxt', '.svelte-kit', '.angular',
+    // IDEs/tools
+    '.idea', '.vscode', '.gradle', '.terraform', '.yarn',
+    // Platforms/targets
+    'target', 'out', 'tmp', 'temp', 'Pods', 'Carthage', 'DerivedData',
+    // Python install dirs
+    'site-packages', 'dist-packages'
   ];
+  const BLACKLIST_SUFFIXES = ['.egg-info', '.dist-info'];
   function isBlacklistedPath(fp) {
     if (!fp) return false;
     const segs = String(fp).split(/[\\/]+/);
-    return segs.some(s => BLACKLIST_NAMES.includes(s));
+    return segs.some(seg => {
+      const s = seg.toLowerCase();
+      if (BLACKLIST_NAMES.includes(s)) return true;
+      return BLACKLIST_SUFFIXES.some(suf => s.endsWith(suf));
+    });
   }
 
   let checkMap = {};      // fullPath -> boolean | 'dir'
@@ -993,5 +1007,3 @@ def api_copy():
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
-
-# Less than 1,000 lines!
