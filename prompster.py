@@ -3,6 +3,9 @@
 """
 Prompster: a vibe-coded Flask app to browse repos, select files or folders,
 and copy a Markdown preview for LLMs. Read-only, non-critical.
+
+Author: Isaac Nivet, o1 Pro, o3 Pro, GPT-5 Pro
+Source: https://github.com/IsaacLoop/prompster
 """
 
 import os
