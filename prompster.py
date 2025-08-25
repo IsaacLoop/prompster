@@ -394,7 +394,9 @@ INDEX_HTML = r"""
     // Platforms/targets
     'target', 'out', 'tmp', 'temp', 'Pods', 'Carthage', 'DerivedData',
     // Python install dirs
-    'site-packages', 'dist-packages'
+    'site-packages', 'dist-packages',
+    // App file
+    'prompster.py'
   ];
   const BLACKLIST_SUFFIXES = ['.egg-info', '.dist-info'];
   function isBlacklistedPath(fp) {
