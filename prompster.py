@@ -301,6 +301,18 @@ INDEX_HTML = r"""
     button:hover {
       background: #005fa3;
     }
+    button.copied {
+      background: #2e7d32;
+    }
+    button.copied:hover {
+      background: #1b5e20;
+    }
+    button.copy-failed {
+      background: #a83232;
+    }
+    button.copy-failed:hover {
+      background: #7a2424;
+    }
     #statsLine {
       margin: 1rem 0 0 0;
       font-size: 0.9rem;
@@ -412,6 +424,13 @@ INDEX_HTML = r"""
       expandMap = JSON.parse(localStorage.getItem("prompster-expanded") || "{}");
       allowMap = JSON.parse(localStorage.getItem("prompster-allow-blacklist") || "{}");
     } catch { checkMap = {}; expandMap = {}; allowMap = {}; }
+  }
+
+  function getProjectTag() {
+    const base = (ROOT_FULL_PATH || '').split(/[\\/]+/).filter(Boolean).pop() || 'project';
+    let tag = base.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+    if (!/^[a-z_]/.test(tag)) tag = 'p-' + tag;
+    return tag;
   }
   function saveCheckMap(){ localStorage.setItem("prompster-checked", JSON.stringify(checkMap)); }
   function saveExpandMap(){ localStorage.setItem("prompster-expanded", JSON.stringify(expandMap)); }
@@ -854,7 +873,9 @@ INDEX_HTML = r"""
     const res = await fetch('/api/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: checkedFiles }) });
     const untrimmed = await res.text();
     const resultText = untrimmed.trimEnd();
-    document.getElementById('result').textContent = resultText;
+    const projectTag = getProjectTag();
+    const wrapped = `<${projectTag}>\n${resultText}\n</${projectTag}>`;
+    document.getElementById('result').textContent = wrapped;
     const stats = calculateStats(resultText, checkedFiles.length);
     document.getElementById('statsLine').textContent = stats;
   }
@@ -872,9 +893,34 @@ INDEX_HTML = r"""
     if (!id) return;
     switch(id) {
       case 'copyBtn': {
+        const btn = e.target;
         const content = document.getElementById('result').textContent;
         if (!content) return;
-        try { await navigator.clipboard.writeText(content); } catch (err) { console.error("Clipboard error:", err); }
+        try {
+          await navigator.clipboard.writeText(content);
+          const original = btn.textContent;
+          btn.textContent = 'Copied ✔';
+          btn.classList.remove('copy-failed');
+          btn.classList.add('copied');
+          btn.disabled = true;
+          setTimeout(() => {
+            btn.textContent = original || 'Copy 📋';
+            btn.classList.remove('copied');
+            btn.disabled = false;
+          }, 1200);
+        } catch (err) {
+          console.error('Clipboard error:', err);
+          const original = btn.textContent;
+          btn.textContent = 'Copy failed';
+          btn.classList.remove('copied');
+          btn.classList.add('copy-failed');
+          btn.disabled = true;
+          setTimeout(() => {
+            btn.textContent = original || 'Copy 📋';
+            btn.classList.remove('copy-failed');
+            btn.disabled = false;
+          }, 1600);
+        }
         break;
       }
       case 'refreshBtn': {
