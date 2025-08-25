@@ -967,8 +967,11 @@ INDEX_HTML = r"""
         break;
       }
       case 'unselectAllBtn': {
-        document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-        rebuildCheckMapFromDOM(); saveCheckMap(); await updatePreview();
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.indeterminate = false; });
+        checkMap = {}; saveCheckMap();
+        // Ensure all parents lose indeterminate state
+        document.querySelectorAll('li').forEach(li => updateParentFolders(li));
+        await updatePreview();
         break;
       }
     }
