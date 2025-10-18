@@ -354,9 +354,8 @@ INDEX_HTML = r"""
   <div class="container">
     <h1>Prompster</h1>
     <p>
-      A tiny Flask server for multi-level folder browsing with stacked sticky headers,
-      tri-state checkboxes, on-demand expansion, and z-index by depth 
-      so no child appears above its ancestors.
+      Prompster: a vibe-coded Flask app to browse repos, select files or folders,
+      and copy a Markdown preview for LLMs. Read-only, non-critical.
     </p>
 
     <div class="file-tree" id="tree"></div>
