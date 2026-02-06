@@ -4,7 +4,7 @@
 Prompster: a vibe-coded Flask app to browse repos, select files or folders,
 and copy a Markdown preview for LLMs. Read-only, non-critical.
 
-Author: Isaac Nivet, o1 Pro, o3 Pro, GPT-5 Pro
+Author: Isaac Nivet, o1 Pro, o3 Pro, GPT-5 Pro, GPT-5.3 Codex
 Source: https://github.com/IsaacLoop/prompster
 """
 
@@ -354,9 +354,7 @@ INDEX_HTML = r"""
   <div class="container">
     <h1>Prompster</h1>
     <p>
-      A tiny Flask server for multi-level folder browsing with stacked sticky headers,
-      tri-state checkboxes, on-demand expansion, and z-index by depth 
-      so no child appears above its ancestors.
+      Browse your project, choose the files you want, and generate a Markdown preview to copy into an LLM.
     </p>
 
     <div class="file-tree" id="tree"></div>
@@ -413,6 +411,8 @@ INDEX_HTML = r"""
   let expandMap = {};     // fullPath -> boolean (expanded)
   let allowMap = {};      // fullPath -> boolean (user allowed blacklist override)
   let treeCache = new Map(); // fullPath -> { children: [...], total, offset }
+  let selectionActionVersion = 0;
+  let previewUpdateVersion = 0;
 
   window.onload = async function() {
     loadLocalMaps();
@@ -672,17 +672,23 @@ INDEX_HTML = r"""
     }
   }
 
-  async function fetchAllChildrenBfs(folderFullPath, onChild, shouldDescendDir) {
+  async function fetchAllChildrenBfs(folderFullPath, onChild, shouldDescendDir, shouldContinue) {
+    const canContinue =
+      typeof shouldContinue === 'function' ? shouldContinue : () => true;
     const queue = [folderFullPath];
     while (queue.length) {
+      if (!canContinue()) return false;
       const current = queue.shift();
       let offset = 0;
       let total = 0;
       do {
+        if (!canContinue()) return false;
         const data = await fetchChildren(current, offset, PAGE_SIZE);
+        if (!canContinue()) return false;
         total = data.total;
         offset += data.children.length;
         for (const child of data.children) {
+          if (!canContinue()) return false;
           await onChild(child);
           if (child.is_dir) {
             const allowDescend = typeof shouldDescendDir === 'function' ? shouldDescendDir(child.fullPath) : true;
@@ -691,6 +697,7 @@ INDEX_HTML = r"""
         }
       } while (offset < total);
     }
+    return true;
   }
 
   async function collectAllFilesUnder(folderFullPath) {
@@ -833,10 +840,9 @@ INDEX_HTML = r"""
       const val = checkMap[fp];
       if (isDir) {
         if (val === 'dir') { cb.checked = true; cb.indeterminate = false; }
-        else if (val === false) { cb.checked = false; cb.indeterminate = false; }
+        else { cb.checked = false; cb.indeterminate = false; }
       } else {
-        if (val === true) cb.checked = true;
-        else if (val === false) cb.checked = false;
+        cb.checked = val === true;
       }
     });
     // Recompute tri-state up the tree
@@ -844,42 +850,79 @@ INDEX_HTML = r"""
   }
 
   // ---------- Preview / controls ----------
-  async function updatePreview() {
-    const filesSet = new Set();
-    const excluded = new Set(Object.keys(checkMap).filter(fp => checkMap[fp] === false));
-    // Add explicitly checked files
-    for (const [fp, val] of Object.entries(checkMap)) {
-      if (val === true && !excluded.has(fp)) {
-        if (!isBlacklistedPath(fp) || allowMap[fp]) filesSet.add(fp);
-      }
-    }
-    // Add files under checked directories, minus explicit exclusions
-    const selectedDirs = Object.keys(checkMap).filter(fp => checkMap[fp] === 'dir');
-    for (const dir of selectedDirs) {
-      const files = await collectAllFilesUnder(dir);
-      for (const f of files) {
-        if (excluded.has(f)) continue;
-        if (isBlacklistedPath(f) && !allowMap[f]) continue;
-        filesSet.add(f);
-      }
-    }
-    // Ensure explicit unchecks are removed (defensive)
-    for (const f of excluded) filesSet.delete(f);
-    const checkedFiles = Array.from(filesSet);
+  function normalizePath(fp) {
+    return String(fp || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  }
 
-    if (checkedFiles.length === 0) {
-      document.getElementById('result').textContent = "";
-      document.getElementById('statsLine').textContent = "0 files | 0 lines | 0 words | 0 characters selected";
-      return;
+  function dedupeSelectedDirs(dirs) {
+    const sorted = dirs.slice().sort((a, b) => normalizePath(a).length - normalizePath(b).length);
+    const deduped = [];
+    for (const dir of sorted) {
+      const normDir = normalizePath(dir);
+      if (!normDir) continue;
+      const nested = deduped.some(parent => {
+        const normParent = normalizePath(parent);
+        return normDir === normParent || normDir.startsWith(normParent + '/');
+      });
+      if (!nested) deduped.push(dir);
     }
-    const res = await fetch('/api/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: checkedFiles }) });
-    const untrimmed = await res.text();
-    const resultText = untrimmed.trimEnd();
-    const projectTag = getProjectTag();
-    const wrapped = `<${projectTag}>\n${resultText}\n</${projectTag}>`;
-    document.getElementById('result').textContent = wrapped;
-    const stats = calculateStats(resultText, checkedFiles.length);
-    document.getElementById('statsLine').textContent = stats;
+    return deduped;
+  }
+
+  async function updatePreview() {
+    const runId = ++previewUpdateVersion;
+    const resultEl = document.getElementById('result');
+    const statsEl = document.getElementById('statsLine');
+    statsEl.textContent = "Updating preview...";
+
+    try {
+      const filesSet = new Set();
+      const excluded = new Set(Object.keys(checkMap).filter(fp => checkMap[fp] === false));
+      // Add explicitly checked files
+      for (const [fp, val] of Object.entries(checkMap)) {
+        if (val === true && !excluded.has(fp)) {
+          if (!isBlacklistedPath(fp) || allowMap[fp]) filesSet.add(fp);
+        }
+      }
+      // Add files under checked directories (top-most only), minus explicit exclusions
+      const selectedDirs = dedupeSelectedDirs(Object.keys(checkMap).filter(fp => checkMap[fp] === 'dir'));
+      for (const dir of selectedDirs) {
+        const files = await collectAllFilesUnder(dir);
+        if (runId !== previewUpdateVersion) return;
+        for (const f of files) {
+          if (excluded.has(f)) continue;
+          if (isBlacklistedPath(f) && !allowMap[f]) continue;
+          filesSet.add(f);
+        }
+      }
+      if (runId !== previewUpdateVersion) return;
+
+      // Ensure explicit unchecks are removed (defensive)
+      for (const f of excluded) filesSet.delete(f);
+      const checkedFiles = Array.from(filesSet);
+
+      if (checkedFiles.length === 0) {
+        if (runId !== previewUpdateVersion) return;
+        resultEl.textContent = "";
+        statsEl.textContent = "0 files | 0 lines | 0 words | 0 characters selected";
+        return;
+      }
+
+      const res = await fetch('/api/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: checkedFiles }) });
+      if (runId !== previewUpdateVersion) return;
+      const untrimmed = await res.text();
+      if (runId !== previewUpdateVersion) return;
+      const resultText = untrimmed.trimEnd();
+      const projectTag = getProjectTag();
+      const wrapped = `<${projectTag}>\n${resultText}\n</${projectTag}>`;
+      resultEl.textContent = wrapped;
+      const stats = calculateStats(resultText, checkedFiles.length);
+      statsEl.textContent = stats;
+    } catch (err) {
+      if (runId !== previewUpdateVersion) return;
+      console.error('Preview update failed:', err);
+      statsEl.textContent = "Preview update failed. Try Refresh.";
+    }
   }
 
   function formatNum(n) { try { return Number(n).toLocaleString(); } catch { return String(n); } }
@@ -949,24 +992,34 @@ INDEX_HTML = r"""
         break;
       }
       case 'selectAllBtn': {
+        const actionVersion = ++selectionActionVersion;
         // Select from entire root recursively via API, skipping blacklist
+        const nextMap = {};
         const filesSet = new Set();
-        await fetchAllChildrenBfs(ROOT_FULL_PATH, async (node) => {
-          const fp = node.fullPath;
-          if (!fp) return;
-          if (node.is_dir) {
-            if (!isBlacklistedPath(fp) || allowMap[fp]) checkMap[fp] = 'dir';
-          } else {
-            if (!isBlacklistedPath(fp) || allowMap[fp]) filesSet.add(fp);
-          }
-        }, (dirPath) => (!isBlacklistedPath(dirPath) || allowMap[dirPath]));
-        for (const f of filesSet) checkMap[f] = true;
+        const completed = await fetchAllChildrenBfs(
+          ROOT_FULL_PATH,
+          async (node) => {
+            const fp = node.fullPath;
+            if (!fp) return;
+            if (node.is_dir) {
+              if (!isBlacklistedPath(fp) || allowMap[fp]) nextMap[fp] = 'dir';
+            } else {
+              if (!isBlacklistedPath(fp) || allowMap[fp]) filesSet.add(fp);
+            }
+          },
+          (dirPath) => (!isBlacklistedPath(dirPath) || allowMap[dirPath]),
+          () => actionVersion === selectionActionVersion
+        );
+        if (!completed || actionVersion !== selectionActionVersion) break;
+        for (const f of filesSet) nextMap[f] = true;
+        checkMap = nextMap;
         saveCheckMap();
         syncDomFromCheckMap();
         await updatePreview();
         break;
       }
       case 'unselectAllBtn': {
+        ++selectionActionVersion; // Cancel in-flight bulk selections.
         document.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.indeterminate = false; });
         checkMap = {}; saveCheckMap();
         // Ensure all parents lose indeterminate state
