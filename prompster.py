@@ -3,6 +3,7 @@
 """
 Prompster: a vibe-coded Flask app to browse repos, select files or folders,
 and copy a Markdown preview for LLMs. Read-only, non-critical.
+Design note: keep this project as a single-file app in `prompster.py`.
 
 Author: Isaac Nivet, o1 Pro, o3 Pro, GPT-5 Pro, GPT-5.3 Codex
 Source: https://github.com/IsaacLoop/prompster
@@ -11,7 +12,7 @@ Source: https://github.com/IsaacLoop/prompster
 import os
 import re
 import fnmatch
-import mimetypes
+import argparse
 from pathlib import Path
 from flask import Flask, request, jsonify, render_template_string
 
@@ -360,18 +361,18 @@ INDEX_HTML = r"""
     <div class="file-tree" id="tree"></div>
 
     <div id="btnBar1">
-      <button id="selectAllBtn">Select All ⭐</button>
-      <button id="unselectAllBtn">Unselect All ♻</button>
-      <button id="expandAllBtn">Expand All ⬇</button>
-      <button id="collapseAllBtn">Collapse All ⬆</button>
+      <button id="selectAllBtn">Select all ✅</button>
+      <button id="unselectAllBtn">Clear selection 🧹</button>
+      <button id="expandAllBtn">Expand all 📂</button>
+      <button id="collapseAllBtn">Collapse all 📁</button>
     </div>
     <div id="btnBar2">
-      <button id="copyBtn">Copy 📋</button>
-      <button id="refreshBtn">Refresh 🔄</button>
+      <button id="copyBtn">Copy preview 📋</button>
+      <button id="refreshBtn">Refresh tree 🔄</button>
     </div>
 
     <div id="statsLine"></div>
-    <h3>Previsualisation</h3>
+    <h3>Preview 👀</h3>
     <div id="result"></div>
   </div>
 
@@ -925,7 +926,7 @@ INDEX_HTML = r"""
     }
   }
 
-  function formatNum(n) { try { return Number(n).toLocaleString(); } catch { return String(n); } }
+  function formatNum(n) { try { return Number(n).toLocaleString('en-US'); } catch { return String(n); } }
   function calculateStats(text, fileCount) {
     const lines = text ? text.split("\n").length : 0;
     const words = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -944,24 +945,24 @@ INDEX_HTML = r"""
         try {
           await navigator.clipboard.writeText(content);
           const original = btn.textContent;
-          btn.textContent = 'Copied ✔';
+          btn.textContent = 'Copied ✅';
           btn.classList.remove('copy-failed');
           btn.classList.add('copied');
           btn.disabled = true;
           setTimeout(() => {
-            btn.textContent = original || 'Copy 📋';
+            btn.textContent = original || 'Copy preview 📋';
             btn.classList.remove('copied');
             btn.disabled = false;
           }, 1200);
         } catch (err) {
           console.error('Clipboard error:', err);
           const original = btn.textContent;
-          btn.textContent = 'Copy failed';
+          btn.textContent = 'Copy failed ⚠️';
           btn.classList.remove('copied');
           btn.classList.add('copy-failed');
           btn.disabled = true;
           setTimeout(() => {
-            btn.textContent = original || 'Copy 📋';
+            btn.textContent = original || 'Copy preview 📋';
             btn.classList.remove('copy-failed');
             btn.disabled = false;
           }, 1600);
@@ -1113,4 +1114,22 @@ def api_copy():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    env_port = os.getenv("PROMPSTER_PORT", "5000")
+    try:
+        default_port = int(env_port)
+    except ValueError:
+        default_port = 5000
+
+    parser = argparse.ArgumentParser(description="Run Prompster")
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=default_port,
+        help="Port to run on (default: 5000, or PROMPSTER_PORT if set)",
+    )
+    args = parser.parse_args()
+    if not (1 <= args.port <= 65535):
+        parser.error("--port must be between 1 and 65535")
+
+    app.run(host="127.0.0.1", port=args.port, debug=True)

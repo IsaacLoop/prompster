@@ -3,12 +3,14 @@
 A vibe-coded Flask app to browse repos, select files or folders,
 and copy a Markdown preview for LLMs. Read-only, non-critical.
 
+Design note: Prompster is intentionally a single-file app. Keep frontend and backend in `prompster.py` (no extra templates/static files).
+
 ## How to use
 
 1. Copy the `prompster.py` file to the root of your codebase.
-2. Make sure you have flask installed, and run `python prompster.py`.
-3. Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
-4. Select the files you want to show the LLM, and click "Copy".
+2. Make sure you have flask installed, and run `python prompster.py --port 5000` (or any other port).
+3. Open `http://127.0.0.1:<your-port>` in your browser (for example [http://127.0.0.1:5000](http://127.0.0.1:5000)).
+4. Select the files you want to show the LLM, and click "Copy preview".
 5. Paste the result into your LLM.
 
 ## Screenshot
