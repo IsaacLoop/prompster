@@ -3,8 +3,6 @@
 A vibe-coded Flask app to browse repos, select files or folders,
 and copy a Markdown preview for LLMs. Read-only, non-critical.
 
-Design note: Prompster is intentionally a single-file app. Keep frontend and backend in `prompster.py` (no extra templates/static files).
-
 ## How to use
 
 1. Copy the `prompster.py` file to the root of your codebase.
