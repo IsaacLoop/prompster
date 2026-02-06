@@ -905,7 +905,7 @@ INDEX_HTML = r"""
       if (checkedFiles.length === 0) {
         if (runId !== previewUpdateVersion) return;
         resultEl.textContent = "";
-        statsEl.textContent = "0 files | 0 lines | 0 words | 0 characters selected";
+        statsEl.textContent = "0 files | 0 lines | 0 words | 0 characters";
         return;
       }
 
@@ -931,7 +931,7 @@ INDEX_HTML = r"""
     const lines = text ? text.split("\n").length : 0;
     const words = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
     const chars = text.length;
-    return `${formatNum(fileCount)} file${fileCount>1?"s":""} | ${formatNum(lines)} line${lines>1?"s":""} | ${formatNum(words)} word${words>1?"s":""} | ${formatNum(chars)} character${chars>1?"s":""} selected`;
+    return `${formatNum(fileCount)} file${fileCount>1?"s":""} | ${formatNum(lines)} line${lines>1?"s":""} | ${formatNum(words)} word${words>1?"s":""} | ${formatNum(chars)} character${chars>1?"s":""}`;
   }
 
   document.addEventListener('click', async (e) => {
